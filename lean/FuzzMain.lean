@@ -1,4 +1,5 @@
 import Checks
+import Pairs.Fuzz
 import Cairn.Fuzz.Collect
 import Cairn.Fuzz.Main
 

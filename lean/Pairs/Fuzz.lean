@@ -408,3 +408,51 @@ def main (args : List String) : IO UInt32 := do
   | none => return 0
 
 end Pairs.Fuzz
+
+/-! ## On `cairn fuzz`'s host (cairn#189, prototype)
+
+The same packs, replies and checks, plugged into `cairn fuzz`'s simulated host through
+`Cairn.Fuzz.Custom`. The host's own moves (replies in any order, to cancelled and answered ids,
+timers, the clock, evictions) are Cairn's; Pairs adds what the replies hold and the per-step
+checks. Missing: ^27's comparison of the host's outstanding requests with the app's `live`,
+since a relation sees only the transition. -/
+
+namespace Pairs
+
+open Cairn Cairn.Fuzz Pairs.Fuzz
+
+def fuzz : Cairn.Fuzz.Custom State where
+  edits := fun _ c => if c == 4 then some (do
+      let t ← Gen.elem typed
+      return [.selectAll, .insert t]) else none
+  -- Some images big enough (64 MiB decoded) that the 192 MiB cache budget evicts.
+  replies := fun _ _ r => some (match r with
+    | .loadImage src _ => do
+      if (src.splitOn "broken").length == 1 && (← Gen.chance 1 3) then return .image 4096 4096
+      answer r
+    | _ => answer r)
+  relations :=
+    let on (f : Core → Core → Bool) : Transition State → Bool := fun t => f t.before.core t.after.core
+    [ (20, on fun _ c' => boardCheck c'),
+      (21, on fun _ c' => c'.game.up.length ≤ 2 && c'.game.up.all (!c'.game.isMatched ·)),
+      (22, on fun _ c' => c'.game.won == c'.game.allMatched),
+      (23, on fun _ c' => (c'.game.flipAll (c'.game.solve c'.now) c'.now).won),
+      (24, on fun _ c' => 2 * c'.game.moves + c'.game.up.length % 2 == c'.game.flips),
+      (25, on fun c c' => c'.deals != c.deals || c.game.matched.all c'.game.matched.contains),
+      (26, on fun c c' => c.scores.all fun (k, b) => match c'.scores.get k with
+        | some b' => decide (b'.le b)
+        | none => false),
+      -- Only `Reqs.Ok`: the frame's effects are the runtime's, which holds requests back past six
+      -- at a time and sends them later, so their ids needn't be new to the step.
+      (27, fun t => decide t.after.reqs.Ok),
+      (28, fun t => match t.msg with
+        | some (.reply id _) => t.before.reqs.isLive id ||
+            (t.after.core == t.before.core && sameReqs t.after.reqs t.before.reqs)
+        | _ => true),
+      (29, fun t => match t.msg with
+        | some (.reply id rep) => t.after.core.board == t.before.core.board || completes t.before.core id rep
+        | _ => true) ]
+  -- Once the host has answered everything: no pack still loading, nothing still awaited.
+  drained := [(27, fun s => s.core.loading.isNone && s.reqs.live.isEmpty)]
+
+end Pairs

@@ -7,7 +7,7 @@ package pairs where
     -- `weak.`: Lake passes it to every module, and only those that use the claim commands know it.
     ⟨`weak.cairn.claims.scope, "pairs"⟩]
 
-require "iamnbutler" / "cairn" @ "^0.2.3"
+require cairn from git "https://github.com/iamnbutler/cairn.git" @ "1987f0639398aee13d6c68751e2e1d9e2ea7f0c9" / "lean"
 require "iamnbutler" / "cairn_json" @ "^0.1.0"
 
 /-- The app: its exports (`Pairs.Abi`) and everything they import from this package. -/
