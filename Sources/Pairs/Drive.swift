@@ -80,40 +80,41 @@ final class Driver {
 
     /// Wins the game on the board, playing as someone with a perfect memory: turn unknown cards,
     /// remember their faces (the image each shows), and turn a pair as soon as both are known.
-    /// Returns the number of cards turned.
+    /// Returns the number of cards turned. With `pairs`, stops once that many pairs are matched.
     @discardableResult
-    func win(timeout: Double = 30) -> Int {
+    func win(timeout: Double = 30, pairs: Int? = nil) -> Int {
+        // Every card that can be turned now; the others are matched already (a game in progress).
         let start = frame
-        let n = cardCount(start)
-        let rects = (0..<n).map { k -> Rect in
-            guard let c = card(k, in: start) else { fail("card \(k) isn't face down at the start") }
-            return c.rect
-        }
+        let ks = start.ax.compactMap { $0.control?.claim == 2 ? Int($0.control!.key) : nil }
+        let n = (ks.max() ?? -1) + 1
+        var rects: [Int: Rect] = [:]
+        for k in ks { rects[k] = card(k, in: start)!.rect }
         var known: [Int: String] = [:]
-        var done: Set<Int> = []
+        var done: Set<Int> = Set((0..<n).filter { rects[$0] == nil })
+        let goal = min(n, done.count + 2 * (pairs ?? n))
         var turned = 0
         func turn(_ k: Int) -> String {
             guard let c = card(k) else { fail("card \(k) can't be turned") }
             click(c)
             turned += 1
-            let f = until(5, "card \(k)'s image didn't show") { image(in: rects[k], $0) != nil || won($0) }
-            let src = image(in: rects[k], f) ?? ""
+            let f = until(5, "card \(k)'s image didn't show") { image(in: rects[k]!, $0) != nil || won($0) }
+            let src = image(in: rects[k]!, f) ?? ""
             known[k] = src
             return src
         }
         let end = Date().addingTimeInterval(timeout)
-        while done.count < n && !won(frame) {
+        while done.count < goal && !won(frame) {
             if Date() > end { fail("didn't win in \(timeout) s") }
             let open = known.filter { !done.contains($0.key) }
             if let (a, b) = pairIn(open) {
                 _ = turn(a); _ = turn(b); done.formUnion([a, b]); continue
             }
-            guard let u = (0..<n).first(where: { known[$0] == nil }) else { fail("no unknown card left") }
+            guard let u = (0..<n).first(where: { known[$0] == nil && !done.contains($0) }) else { fail("no unknown card left") }
             let su = turn(u)
             if let m = open.first(where: { $0.value == su })?.key {
                 _ = turn(m); done.formUnion([u, m]); continue
             }
-            guard let v = (0..<n).first(where: { known[$0] == nil }) else { fail("no unknown card left") }
+            guard let v = (0..<n).first(where: { known[$0] == nil && !done.contains($0) }) else { fail("no unknown card left") }
             if turn(v) == su { done.formUnion([u, v]) }
         }
         return turned

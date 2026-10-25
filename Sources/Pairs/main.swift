@@ -109,26 +109,43 @@ if args.contains("--bench") {
 }
 
 if let dir = argument(after: "--shots") {
+    // PAIRS_SHOTS_URL, the stub server (make shots starts it), adds a pack loading over http and
+    // one that fails.
     let out = URL(fileURLWithPath: dir, isDirectory: true)
     try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
     let d = makeDriver("shots")
     func shot(_ name: String) { d.shot(out.appendingPathComponent(name + ".png")); print(out.appendingPathComponent(name + ".png").path) }
+    d.until(3, "doesn't start on Shapes") { $0.ax.contains { $0.label == "Shapes" } }
     Thread.sleep(forTimeInterval: 0.5)
     shot("1-board")
-    d.press(ControlRef(claim: 2, key: 0))
-    d.press(ControlRef(claim: 2, key: 1))
+    // Three pairs matched, then two more cards up: usually a mismatch.
+    d.win(pairs: 3)
+    let down = (0..<16).filter { d.card($0) != nil }
+    for k in down.prefix(2) { d.press(ControlRef(claim: 2, key: UInt32(k))) }
     Thread.sleep(forTimeInterval: 0.3)
-    shot("2-two-up")
-    d.resize(Size(w: 900, h: 640))
-    Thread.sleep(forTimeInterval: 1.2)
+    shot("2-mid-game")
+    d.resize(Size(w: 920, h: 640))
+    Thread.sleep(forTimeInterval: 0.3)
     shot("3-wide")
     d.resize(size)
-    Thread.sleep(forTimeInterval: 0.5)
-    d.press(ControlRef(claim: 3))
-    d.until(2, "New Game didn't deal") { d.cardCount($0) == 16 }
+    if let url = ProcessInfo.processInfo.environment["PAIRS_SHOTS_URL"] {
+        d.open("\(url)/slow")
+        d.until(5, "the slow pack didn't start loading") { _ in d.has("Loading Slow") }
+        Thread.sleep(forTimeInterval: 0.3)
+        shot("4-loading")
+        d.press(ControlRef(claim: 5))
+        d.open("\(url)/broken")
+        d.until(15, "no problem for the broken pack") { _ in d.has("Couldn't open Broken") }
+        shot("5-problem")
+    }
+    d.menu(ControlRef(claim: 10, key: 1))
+    d.until(10, "Patterns didn't load") { f in f.ax.contains { $0.label == "Patterns" } && d.cardCount(f) == 16 }
+    d.win(pairs: 5)
+    Thread.sleep(forTimeInterval: 1.2)
+    shot("6-patterns")
     d.win()
     d.until(3, "no win screen") { _ in d.has("You won!") }
-    shot("4-won")
+    shot("7-won")
     d.stop()
     exit(0)
 }
