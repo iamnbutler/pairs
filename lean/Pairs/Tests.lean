@@ -15,6 +15,9 @@ open Pairs Cairn
 #guard (Where.parse "https://x.test/a.json").toOption = some (.web "https://x.test/a.json" "https://x.test/")
 #guard (Where.parse "  ~/p  ").toOption = some (.file "~/p/pack.json" "~/p/")
 #guard (Where.parse "http://x.test/p").toOption.isNone
+#guard (Where.parse "http://127.0.0.1:8123/good").toOption = some (.web "http://127.0.0.1:8123/good/pack.json" "http://127.0.0.1:8123/good/")
+#guard (Where.parse "http://localhost/p.json").toOption = some (.web "http://localhost/p.json" "http://localhost/")
+#guard (Where.parse "http://localhost.evil.test/p").toOption.isNone
 #guard (Where.parse "ftp://x.test/p").toOption.isNone
 #guard (Where.parse "relative/p").toOption.isNone
 #guard (Where.parse "").toOption.isNone

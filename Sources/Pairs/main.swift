@@ -1,18 +1,14 @@
 import CPairs
 import CairnFrame
 import CairnHost
-import CairnRender
-import ImageIO
-import UniformTypeIdentifiers
 import Foundation
 
 // Pairs on Cairn's host (Cairn's docs/package.md). The host only performs effects; the game is
-// Lean's (lean/Pairs).
-//   Pairs               open the window
-//   Pairs --selftest    run the app headlessly with the real host world (files, images, timers):
-//                       turn a card, open a folder that isn't there, switch to Patterns
-//   Pairs --shots <dir> render frames offscreen as PNGs (no window, no screen capture): the
-//                       first board, a mismatch, Patterns while loading and loaded
+// Lean's (lean/Pairs). The modes besides the window drive the app headlessly (Drive.swift):
+//   Pairs                    open the window
+//   Pairs --selftest         turn a card, refuse a missing folder, switch to Patterns, win a game
+//   Pairs --urltest <base>   open packs from the stub server at <base> (make urltest)
+//   Pairs --shots <dir>      render a few states offscreen as PNGs (no window, no screen capture)
 
 let app = LeanApp(
     module: runtime_initialize_pairs_Pairs_Abi,
@@ -22,6 +18,7 @@ let app = LeanApp(
     codec: FrameV1Codec())
 
 let size = Size(w: 560, h: 640)
+let args = CommandLine.arguments
 
 // The bundled packs' images are `packs/<id>/<face>.png`, relative to the resource bundle.
 guard let resources = Bundle.module.resourcePath, FileManager.default.changeCurrentDirectoryPath(resources) else {
@@ -29,80 +26,100 @@ guard let resources = Bundle.module.resourcePath, FileManager.default.changeCurr
     exit(1)
 }
 
-/// Offscreen PNGs of a few states, rendered from the frames the real host world produces.
-if let i = CommandLine.arguments.firstIndex(of: "--shots"), i + 1 < CommandLine.arguments.count {
-    let dir = URL(fileURLWithPath: CommandLine.arguments[i + 1], isDirectory: true)
-    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-    let engine = Engine(size: size, scalePercent: 200) { LeanCore(app) }
-    engine.start()
-    _ = engine.wait(through: 0)
-    let renderer = try! Renderer()
-    func shot(_ name: String, after seconds: Double = 0.6) {
-        Thread.sleep(forTimeInterval: seconds)
-        guard let f = engine.latest?.frame, let img = try? renderer.image(f, scale: 2) else { return }
-        let url = dir.appendingPathComponent(name + ".png")
-        let d = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
-        CGImageDestinationAddImage(d, img.cgImage(), nil)
-        CGImageDestinationFinalize(d)
-        print(url.path)
-    }
-    func press(_ ref: ControlRef) {
-        guard let n = engine.latest?.frame.ax.first(where: { $0.control == ref }) else { return }
-        let p = Point(x: n.rect.x + n.rect.w / 2, y: n.rect.y + n.rect.h / 2)
-        engine.send([.pointerMove(p), .pointerDown(p, .primary, clicks: 1, Mods()), .pointerUp(p, .primary, Mods())])
-    }
-    shot("1-board", after: 1)
-    press(ControlRef(claim: 2, key: 0)); press(ControlRef(claim: 2, key: 1))
-    shot("2-two-up", after: 0.4)
-    engine.send([.menuSelect(place: 6, ControlRef(claim: 10, key: 1))])
-    shot("3-loading", after: 0.01)
-    shot("4-patterns", after: 2)
-    engine.stop()
+func argument(after flag: String) -> String? {
+    guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+    return args[i + 1]
+}
+
+func makeDriver(_ name: String) -> Driver { Driver(name, size: size) { LeanCore(app) } }
+
+if args.contains("--selftest") {
+    let d = makeDriver("selftest")
+    guard d.cardCount() == 16 else { d.fail("the first frame has \(d.cardCount()) cards, not 16") }
+    // Turn card 0: it stops being a control, and its image shows.
+    d.press(ControlRef(claim: 2, key: 0))
+    d.until(2, "card 0's image didn't show") { d.card(0, in: $0) == nil && !$0.imageSources.isEmpty }
+    // A folder that isn't there: the problem line says so, and the game goes on.
+    d.open("/nonexistent/pairs-selftest")
+    d.until(5, "no problem line for a missing folder") { _ in d.has("Couldn't open") }
+    // Patterns from the menu: its images load from the bundle, and a game of it is dealt.
+    d.menu(ControlRef(claim: 10, key: 1))
+    d.until(10, "Patterns didn't load") { f in f.ax.contains { $0.label == "Patterns" } && d.cardCount(f) == 16 }
+    // Win it: the win screen, and a best score for Patterns.
+    let turned = d.win()
+    d.until(3, "no win screen") { _ in d.has("You won!") }
+    guard !d.has("No best yet") else { d.fail("no best score after a win") }
+    d.stop()
+    print("selftest: PASS (16 cards, a card's image, a missing folder refused, Patterns loaded and won in \(turned) turns)")
     exit(0)
 }
 
-if CommandLine.arguments.contains("--selftest") {
-    func fail(_ message: String) -> Never {
-        FileHandle.standardError.write(Data("selftest: FAIL: \(message)\n".utf8))
-        exit(1)
+if let base = argument(after: "--urltest") {
+    let d = makeDriver("urltest")
+    let shapes = { (f: Frame) in f.ax.contains { $0.label == "Shapes" } }
+    d.until(2, "doesn't start on Shapes", shapes)
+    // A pack over http from the stub: the manifest, then every image, then a game of it.
+    d.open("\(base)/good")
+    d.until(10, "the good pack didn't load") { f in f.ax.contains { $0.label == "Numbers" } && d.cardCount(f) == 16 }
+    d.press(ControlRef(claim: 2, key: 0))
+    d.until(3, "a Numbers card's image didn't show") { f in f.imageSources.contains { $0.hasPrefix("\(base)/good/") } }
+    print("urltest: ok good pack")
+    // Failures leave the game alone and say what went wrong.
+    for (path, words) in [("missing", "404"), ("badjson", "isn't valid JSON"), ("broken", "Number 7 didn't load")] {
+        let before = d.frame.ax.filter { $0.control?.claim == 2 }.map(\.rect)
+        d.open("\(base)/\(path)")
+        d.until(15, "\(path): no problem line saying \(words)") { _ in d.texts.contains { $0.hasPrefix("Couldn't open") && $0.contains(words) } }
+        guard d.frame.ax.contains(where: { $0.label == "Numbers" }),
+              d.frame.ax.filter({ $0.control?.claim == 2 }).map(\.rect) == before
+        else { d.fail("\(path) changed the game") }
+        print("urltest: ok \(path) refused: \(d.texts.first { $0.hasPrefix("Couldn't") } ?? "")")
     }
-    let engine = Engine(size: size, scalePercent: 200) { LeanCore(app) }
-    engine.start()
-    guard let first = engine.wait(through: 0) else { fail("no first frame") }
-    func card(_ f: Frame, _ k: UInt32) -> AxNode? { f.ax.first { $0.control == ControlRef(claim: 2, key: k) } }
-    func texts(_ f: Frame) -> [String] { f.ax.map(\.label) }
-    /// Polls the latest frame until `ok` holds, for up to `seconds`.
-    func until(_ seconds: Double, _ what: String, _ ok: (Frame) -> Bool) -> Frame {
-        let end = Date().addingTimeInterval(seconds)
-        while Date() < end {
-            if let p = engine.latest, ok(p.frame) { return p.frame }
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-        fail("\(what) (after \(seconds) s; texts: \(engine.latest.map { texts($0.frame) } ?? []); field: \(String(describing: engine.latest?.frame.ax.first { $0.role == .textField }))")
-    }
-    let cards = (0..<16).filter { card(first.frame, UInt32($0)) != nil }.count
-    guard cards == 16 else { fail("the first frame has \(cards) cards, not 16") }
-    // Turn card 0: it stops being a control, and its image loads (no failure words).
-    guard let c0 = card(first.frame, 0) else { fail("no card ^2#0") }
-    let p = Point(x: c0.rect.x + c0.rect.w / 2, y: c0.rect.y + c0.rect.h / 2)
-    engine.send([.pointerMove(p), .pointerDown(p, .primary, clicks: 1, Mods()), .pointerUp(p, .primary, Mods())])
-    _ = until(2, "card ^2#0 is still a control after a press") { card($0, 0) == nil }
+    // Switching packs while one loads: the slow pack's images answer after 3 s; Shapes from the
+    // menu cancels them, loads, and stays when the slow replies would have arrived.
+    d.open("\(base)/slow")
+    d.until(5, "the slow pack didn't start loading") { _ in d.has("Loading Slow") }
+    guard d.node(ControlRef(claim: 5)) != nil else { d.fail("no Cancel while loading") }
+    d.menu(ControlRef(claim: 10, key: 0))
+    d.until(5, "Shapes didn't load while Slow was loading", shapes)
+    guard !d.has("Loading Slow") else { d.fail("Slow is still loading after the switch") }
+    Thread.sleep(forTimeInterval: 4)
+    guard shapes(d.frame), !d.has("Loading"), !d.has("Couldn't") else { d.fail("a late Slow reply changed the game: \(d.texts)") }
+    print("urltest: ok switching packs while loading")
+    // Cancel: the load stops, the game goes on.
+    d.open("\(base)/slow")
+    d.until(5, "the slow pack didn't start loading again") { _ in d.has("Loading Slow") }
+    d.press(ControlRef(claim: 5))
+    d.until(2, "Cancel didn't stop the load") { _ in !d.has("Loading") }
+    Thread.sleep(forTimeInterval: 4)
+    guard shapes(d.frame) else { d.fail("a cancelled load changed the game") }
+    print("urltest: ok cancel")
+    d.stop()
+    print("urltest: PASS")
+    exit(0)
+}
+
+if let dir = argument(after: "--shots") {
+    let out = URL(fileURLWithPath: dir, isDirectory: true)
+    try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    let d = makeDriver("shots")
+    func shot(_ name: String) { d.shot(out.appendingPathComponent(name + ".png")); print(out.appendingPathComponent(name + ".png").path) }
     Thread.sleep(forTimeInterval: 0.5)
-    if let bad = engine.latest?.frame.ax.first(where: { ["Not found", "No access", "Not an image", "Failed"].contains($0.label) }) {
-        fail("card 0's image didn't load: \(bad.label)")
-    }
-    // A folder that isn't there: the problem line says so, and the game goes on.
-    guard let field = engine.latest?.frame.ax.first(where: { $0.control == ControlRef(claim: 4) }) else { fail("no pack field (^4)") }
-    let q = Point(x: field.rect.x + field.rect.w / 2, y: field.rect.y + field.rect.h / 2)
-    engine.send([.pointerMove(q), .pointerDown(q, .primary, clicks: 1, Mods()), .pointerUp(q, .primary, Mods()),
-                 .insertText("/nonexistent/pairs-selftest"), .key(.enter, Mods())])
-    _ = until(5, "no problem line for a missing folder") { f in texts(f).contains { $0.hasPrefix("Couldn't open") } }
-    // Patterns from the menu: its images load from the bundle, and a game of it is dealt.
-    engine.send([.menuOpen(place: 6), .menuSelect(place: 6, ControlRef(claim: 10, key: 1)), .menuClose(place: 6)])
-    let after = until(10, "Patterns didn't load") { f in texts(f).contains("Patterns") }
-    guard (0..<16).allSatisfy({ card(after, UInt32($0)) != nil }) else { fail("Patterns's board isn't 16 face-down cards") }
-    engine.stop()
-    print("selftest: PASS (Pairs: 16 cards, a card turned with its image, a missing folder refused, Patterns loaded)")
+    shot("1-board")
+    d.press(ControlRef(claim: 2, key: 0))
+    d.press(ControlRef(claim: 2, key: 1))
+    Thread.sleep(forTimeInterval: 0.3)
+    shot("2-two-up")
+    d.resize(Size(w: 900, h: 640))
+    Thread.sleep(forTimeInterval: 1.2)
+    shot("3-wide")
+    d.resize(size)
+    Thread.sleep(forTimeInterval: 0.5)
+    d.press(ControlRef(claim: 3))
+    d.until(2, "New Game didn't deal") { d.cardCount($0) == 16 }
+    d.win()
+    d.until(3, "no win screen") { _ in d.has("You won!") }
+    shot("4-won")
+    d.stop()
     exit(0)
 }
 
