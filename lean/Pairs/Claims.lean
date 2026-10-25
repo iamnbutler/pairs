@@ -503,11 +503,4 @@ def app : App State :=
     initFocus := some fieldRef }
 -- endregion: app
 
-/-- For `cairn fuzz`: the window's smallest size is the app's `minSize` (the fuzzer otherwise
-measures the view), and the menu bar item's moves have no control in the window's frame (the
-menu is the host's; Cairn's fuzzer checks presence in the window only, cairn#176). -/
-def fuzz : Cairn.Fuzz.Custom State where
-  minSize := fun s => some (minSize s)
-  noControl := [8, 9, 10, 11, 12]
-
 end Pairs

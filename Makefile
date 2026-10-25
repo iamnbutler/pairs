@@ -108,27 +108,15 @@ packs:
 	rm -rf Sources/Pairs/packs
 	swift tools/packs/draw.swift bundled Sources/Pairs/packs
 
-# Pairs.app, built for release, signed and installed in ~/Applications. SIGN is a codesign
-# identity: the first "Developer ID Application" one in the keychain, else `-` (ad hoc).
-#
-# The bundling below is cairn's tools/bundle/bundle.sh as fixed in cairn#183 (the released
-# script only wraps Cairn's own examples and drops SwiftPM resources); once a Cairn release has
-# `cairn bundle`, this becomes `$(CAIRN) bundle --sign "$(SIGN)"`.
+# Pairs.app, built for release by `cairn bundle` (bundle/Info.plist; bundle/entitlements.plist
+# is empty and only turns on the hardened runtime), signed and installed in ~/Applications. SIGN
+# is a codesign identity: the first "Developer ID Application" one in the keychain, else `-`.
 SIGN ?= $(or $(shell security find-identity -v -p codesigning 2>/dev/null | grep -m1 '"Developer ID Application' | sed -E 's/.*"(.*)"/\1/'),-)
-APP_OUT = build/apps/Pairs.app
 pairs: build
-	swift build -c release --product Pairs
-	@set -e; bin=$$(swift build -c release --show-bin-path); \
-	  rm -rf $(APP_OUT); mkdir -p $(APP_OUT)/Contents/MacOS $(APP_OUT)/Contents/Resources; \
-	  cp $$bin/Pairs $(APP_OUT)/Contents/MacOS/Pairs; \
-	  cp -R $$bin/pairs_Pairs.bundle $(APP_OUT)/Contents/Resources/; \
-	  cp bundle/Info.plist $(APP_OUT)/Contents/Info.plist; plutil -lint -s $(APP_OUT)/Contents/Info.plist; \
-	  if [ "$(SIGN)" = "-" ]; then codesign --force -s - $(APP_OUT); \
-	  else codesign --force --options runtime -s "$(SIGN)" $(APP_OUT); fi; \
-	  codesign --verify --strict $(APP_OUT)
+	$(CAIRN) bundle --product Pairs --sign "$(SIGN)"
 	rm -rf $(HOME)/Applications/Pairs.app
 	mkdir -p $(HOME)/Applications
-	ditto $(APP_OUT) $(HOME)/Applications/Pairs.app
+	ditto build/apps/Pairs.app $(HOME)/Applications/Pairs.app
 	@echo "pairs: installed ~/Applications/Pairs.app, signed $(if $(filter -,$(SIGN)),ad hoc (no Developer ID identity),by $(SIGN))"
 	@CFFIXED_USER_HOME=$(CURDIR)/build/home $(HOME)/Applications/Pairs.app/Contents/MacOS/Pairs --selftest
 
