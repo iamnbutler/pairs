@@ -4,8 +4,8 @@ import Cairn.Fuzz.Collect
 import Cairn.Fuzz.Main
 
 /-! `lake exe fuzz` (`cairn fuzz`): Cairn's claim-driven fuzzer on Pairs's controls (Cairn's
-docs/fuzz.md): clicks, keys and resizes, the invariants checked after each step. The host's side
-(replies, timers, evictions) is `lake exe pairsfuzz`. -/
+docs/fuzz.md): clicks, keys and resizes, the invariants checked after each step. It plays the
+host too, with Pairs's replies and checks (`Pairs.fuzz`, Pairs/Fuzz.lean). -/
 
 def targets : List Cairn.Fuzz.Target := fuzz_targets%
 
