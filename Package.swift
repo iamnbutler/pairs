@@ -8,7 +8,7 @@ let lib = Context.packageDirectory + "/.cairn/lib"
 let package = Package(
     name: "pairs",
     platforms: [.macOS("27.0")],
-    dependencies: [.package(url: "https://cairn.registry.nexthub.sh/git/iamnbutler/cairn.git", from: "0.2.4")],
+    dependencies: [.package(url: "https://cairn.registry.nexthub.sh/git/iamnbutler/cairn.git", from: "0.2.5")],
     targets: [
         // The Lean exports Cairn's CLean doesn't declare: the app's initializer.
         .target(name: "CPairs", dependencies: [.product(name: "CLean", package: "cairn")]),
