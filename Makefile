@@ -6,7 +6,7 @@ export RESERVOIR_API_URL := https://cairn.registry.nexthub.sh/api/v1
 CAIRN_PKG = lean/.lake/packages/cairn
 CAIRN = $(CAIRN_PKG)/tools/cairn/.build/release/cairn
 
-.PHONY: deps cairn-tool build selftest urltest shots pairs bench lean lint audit ledger ledger-update kernel fuzz pairsfuzz size claims packs check clean
+.PHONY: deps cairn-tool build selftest urltest shots pairs bench lean lint audit ledger ledger-update kernel fuzz size claims packs check clean
 
 # Fetch Cairn and cairn_json as lean/lake-manifest.json pins them.
 deps:
@@ -84,15 +84,13 @@ ledger-update: lean
 kernel: lean
 	cd lean && lake check --inadvisably-no-sandbox
 
-# Cairn's fuzzer on the app through the runtime (build/fuzz/Claims.json), then Pairs's own
-# fuzzer with a random host: replies in any order, late, stale or failing (build/fuzz/pairs.json).
+# Cairn's fuzzer on the app through the runtime, with a simulated host: replies late, in any order,
+# to cancelled and stray ids, failing; timers; evictions. Pairs's replies and per-step checks are
+# `Pairs.fuzz` (lean/Pairs/Fuzz.lean). Into build/fuzz/Claims.json.
 FUZZ_ITERATIONS ?= 200
-fuzz: cairn-tool pairsfuzz
-	$(CAIRN) fuzz --iterations $(FUZZ_ITERATIONS)
-
-pairsfuzz: lean
-	mkdir -p build/fuzz
-	cd lean && lake build -q pairsfuzz && .lake/build/bin/pairsfuzz --iterations $(FUZZ_ITERATIONS) --steps 300 --out ../build/fuzz
+FUZZ_STEPS ?= 300
+fuzz: cairn-tool
+	$(CAIRN) fuzz --iterations $(FUZZ_ITERATIONS) --steps $(FUZZ_STEPS)
 
 # The release binary's size, attributed (build/size/), under Cairn's 5 MB limit.
 size: cairn-tool

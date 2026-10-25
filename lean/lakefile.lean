@@ -7,7 +7,7 @@ package pairs where
     -- `weak.`: Lake passes it to every module, and only those that use the claim commands know it.
     ⟨`weak.cairn.claims.scope, "pairs"⟩]
 
-require "iamnbutler" / "cairn" @ "^0.2.3"
+require "iamnbutler" / "cairn" @ "^0.2.4"
 require "iamnbutler" / "cairn_json" @ "^0.1.0"
 
 /-- The app: its exports (`Pairs.Abi`) and everything they import from this package. -/
@@ -21,11 +21,6 @@ kernel replay read. Never linked into the app. -/
 @[default_target]
 lean_lib Checks
 
-/-- `lake exe pairsfuzz [--seed S] [--iterations N] [--steps K] [--out DIR]`: the app's machine
-against a random host (`Pairs/Fuzz.lean`). -/
-lean_exe pairsfuzz where
-  root := `PairsFuzz
-
-/-- `lake exe fuzz` (`cairn fuzz`): Cairn's claim-driven fuzzer on the app's controls. -/
+/-- `lake exe fuzz` (`cairn fuzz`): Cairn's fuzzer on the app and a simulated host. -/
 lean_exe fuzz where
   root := `FuzzMain
