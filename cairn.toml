@@ -1,6 +1,6 @@
 [package]
 name = "pairs"
-version = "0.1.0"
+version = "0.1.1"
 kind = "bin"
 license = "MIT"
 libs = ["Pairs"]
