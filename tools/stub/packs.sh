@@ -13,3 +13,6 @@ rm "$out/broken/face-007.png"
 mkdir -p "$out/badjson"
 printf '{"name": "Bad", "faces": [' > "$out/badjson/pack.json"
 $draw numbered "$out/big" 100 "Hundred"
+# The same 100-face pack under five more names, so each bench run loads it cold (the host caches
+# images by source).
+for i in 1 2 3 4 5; do ln -s big "$out/big-$i"; done

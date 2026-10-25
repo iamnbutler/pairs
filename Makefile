@@ -6,7 +6,7 @@ export RESERVOIR_API_URL := https://cairn.registry.nexthub.sh/api/v1
 CAIRN_PKG = lean/.lake/packages/cairn
 CAIRN = $(CAIRN_PKG)/tools/cairn/.build/release/cairn
 
-.PHONY: deps cairn-tool build selftest urltest shots pairs lean lint audit ledger ledger-update kernel fuzz pairsfuzz size claims packs check clean
+.PHONY: deps cairn-tool build selftest urltest shots pairs bench lean lint audit ledger ledger-update kernel fuzz pairsfuzz size claims packs check clean
 
 # Fetch Cairn and cairn_json as lean/lake-manifest.json pins them.
 deps:
@@ -37,6 +37,19 @@ urltest: build
 	  for i in $$(seq 50); do [ -s build/stub.port ] && break; sleep 0.2; done; \
 	  port=$$(head -1 build/stub.port); [ -n "$$port" ] || { echo "urltest: the stub server didn't start"; cat build/stub.log; exit 1; }; \
 	  $(RUN_HEADLESS) --urltest http://127.0.0.1:$$port
+
+# A 100-face pack's load time and memory, from a folder and over http (bench/README.md), with
+# `cairn bench` (a release build, then `Pairs --bench`), into build/bench/pairs.json.
+bench: cairn-tool
+	tools/stub/packs.sh build/stub
+	mkdir -p build/bench
+	@set -e; python3 -I tools/stub/serve.py build/stub > build/stub.port 2> build/stub.log & pid=$$!; \
+	  trap "kill $$pid" EXIT; \
+	  for i in $$(seq 50); do [ -s build/stub.port ] && break; sleep 0.2; done; \
+	  port=$$(head -1 build/stub.port); [ -n "$$port" ] || { echo "bench: the stub server didn't start"; exit 1; }; \
+	  rm -rf $(HOME_TEST) && mkdir -p $(HOME_TEST) && \
+	  CFFIXED_USER_HOME=$(HOME_TEST) PAIRS_BENCH_PACKS=$(CURDIR)/build/stub PAIRS_BENCH_URL=http://127.0.0.1:$$port \
+	  PAIRS_BENCH_OUT=$(CURDIR)/build/bench/pairs.json $(CAIRN) bench
 
 # Offscreen renders of a few states into build/shots.
 shots: build
