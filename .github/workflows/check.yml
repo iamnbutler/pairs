@@ -40,12 +40,6 @@ jobs:
           key: build-${{ runner.os }}-${{ hashFiles('lean/lean-toolchain', 'lean/lake-manifest.json', 'Package.resolved') }}
           restore-keys: build-${{ runner.os }}-
 
-      # A cache from older dependencies keeps their checkouts, and Lake's fetch of a new
-      # revision into a registry checkout never finishes (cairn#196). Fetch them afresh.
-      - name: Drop stale Lake checkouts
-        if: steps.cache.outputs.cache-hit != 'true'
-        run: rm -rf lean/.lake/packages
-
       - name: make check
         run: make check FUZZ_ITERATIONS=100
 
