@@ -67,11 +67,17 @@ def dirOf (s : String) : String :=
 /-- `s` with a `/` at the end. -/
 def slashed (s : String) : String := if s.endsWith "/" then s else s ++ "/"
 
+/-- Plain `http` on this machine only (`localhost`, `127.0.0.1`): a pack served while it is
+being made, and the stub server the URL tests use. Nothing off the machine is fetched without
+TLS. -/
+def loopback (t : String) : Bool :=
+  ["http://localhost:", "http://localhost/", "http://127.0.0.1:", "http://127.0.0.1/"].any (t.startsWith ·)
+
 /-- What the person typed, as a place to load a manifest from. -/
 def Where.parse (text : String) : Except String Where :=
   let t := text.trimAscii.toString
   if t.isEmpty then .error "Type a folder (/… or ~/…) or an https:// URL."
-  else if t.startsWith "https://" then
+  else if t.startsWith "https://" || loopback t then
     if t.endsWith ".json" then .ok (.web t (dirOf t))
     else .ok (.web (slashed t ++ "pack.json") (slashed t))
   else if t.startsWith "http://" then .error "Only https:// URLs are allowed."

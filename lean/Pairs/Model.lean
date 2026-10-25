@@ -269,6 +269,9 @@ def manifestData : Where → Reply → Except String ByteArray
   | _, .failed _ msg => .error msg
   | _, _ => .error "unexpected reply"
 
+/-- `e` ending in one full stop. -/
+def sentence (e : String) : String := if e.endsWith "." then e else e ++ "."
+
 def onManifest (id n : Nat) (rep : Reply) : Plan := fun c _ =>
   match c.loading with
   | some l =>
@@ -280,7 +283,7 @@ def onManifest (id n : Nat) (rep : Reply) : Plan := fun c _ =>
           ({ c with loading := some { l with stage := .images p [] } },
            .answer id rep :: (Core.sources p).map .load)
         | .error e =>
-          ({ c with loading := none, problem := some s!"Couldn't open {l.source}: {e}." },
+          ({ c with loading := none, problem := some s!"Couldn't open {l.source}: {sentence e}" },
            [.answer id rep])
       else (c, [.answer id rep])
     | .images .. => (c, [.answer id rep])
