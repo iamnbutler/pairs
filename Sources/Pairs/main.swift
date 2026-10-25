@@ -9,6 +9,7 @@ import Foundation
 //   Pairs --selftest         turn a card, refuse a missing folder, switch to Patterns, win a game
 //   Pairs --urltest <base>   open packs from the stub server at <base> (make urltest)
 //   Pairs --shots <dir>      render a few states offscreen as PNGs (no window, no screen capture)
+//   Pairs --bench            load a 100-face pack: time and memory (make bench; Bench.swift)
 
 let app = LeanApp(
     module: runtime_initialize_pairs_Pairs_Abi,
@@ -96,6 +97,15 @@ if let base = argument(after: "--urltest") {
     d.stop()
     print("urltest: PASS")
     exit(0)
+}
+
+if args.contains("--bench") {
+    let env = ProcessInfo.processInfo.environment
+    guard let packs = env["PAIRS_BENCH_PACKS"] else {
+        FileHandle.standardError.write(Data("bench: set PAIRS_BENCH_PACKS to the stub packs folder (make bench)\n".utf8))
+        exit(2)
+    }
+    Bench.run(makeDriver("bench"), packs: packs, url: env["PAIRS_BENCH_URL"])
 }
 
 if let dir = argument(after: "--shots") {
