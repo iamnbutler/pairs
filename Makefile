@@ -51,9 +51,13 @@ bench: cairn-tool
 	  CFFIXED_USER_HOME=$(HOME_TEST) PAIRS_BENCH_PACKS=$(CURDIR)/build/stub PAIRS_BENCH_URL=http://127.0.0.1:$$port \
 	  PAIRS_BENCH_OUT=$(CURDIR)/build/bench/pairs.json $(CAIRN) bench
 
-# Offscreen renders of a few states into build/shots.
+# Offscreen renders of a few states into build/shots, with packs from the stub server.
 shots: build
-	$(RUN_HEADLESS) --shots $(CURDIR)/build/shots
+	tools/stub/packs.sh build/stub
+	@set -e; python3 -I tools/stub/serve.py build/stub > build/stub.port 2> build/stub.log & pid=$$!; \
+	  trap "kill $$pid" EXIT; \
+	  for i in $$(seq 50); do [ -s build/stub.port ] && break; sleep 0.2; done; \
+	  export PAIRS_SHOTS_URL=http://127.0.0.1:$$(head -1 build/stub.port); $(RUN_HEADLESS) --shots $(CURDIR)/build/shots
 
 # The Lean side alone. `cairn build` turns Lake's artifact cache on, which keeps .olean files out
 # of the build directory, and the ledger and audit import from there: turn it off.
