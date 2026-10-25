@@ -1,10 +1,10 @@
 [package]
 name = "pairs"
-version = "0.1.0"
+version = "0.1.1"
 kind = "bin"
 license = "MIT"
 libs = ["Pairs"]
 
 [dependencies]
-cairn = "^0.2.2"
+cairn = "^0.2.3"
 cairn_json = "^0.1.0"
