@@ -1,1 +1,27 @@
+# claims.lock: every claim id ever issued. Written by `lake exe ledger update`; never edit by hand.
 # id	kind	status	statement	title
+1	place	active	-	Pairs window
+2	move	active	50bb258f79199b32	Turn a card
+3	move	active	70143f4fd3982bb7	New Game
+4	move	active	87dd291de3bcc780	Open a pack
+5	move	active	a43493b1cf6d57f5	Cancel loading
+6	place	active	-	Pairs menu
+7	place	active	-	Packs submenu
+8	move	active	8e8645dd1d7a1da3	Open the menu
+9	move	active	b8d5bdadd3105692	New Game
+10	move	active	ccff59f092dd2340	A bundled pack
+11	move	active	45bf0ad064fc29aa	A pack in the packs folder
+12	move	active	b8aa6ff1b5e3fb25	Open Packs Folder
+20	invariant	active	d7c341ba69bd8ba8	The board is a deal of the pack
+21	invariant	active	326b9cab9ce6feac	At most two unmatched cards face up
+22	invariant	active	d8549b36739f618d	Won exactly when every card is matched
+23	invariant	active	457e3c8a6a950d13	The game can always be won
+24	invariant	active	85e768006eb40765	Moves count pairs turned
+25	invariant	active	e8cae50e9aee7bdf	A matched card stays matched
+26	invariant	active	fce5e9eb41fe82b2	Best scores only improve
+27	invariant	active	ac9c05a54e007e8c	No request is lost
+28	invariant	active	7da57f59feb3318b	A late reply changes nothing
+29	invariant	active	b93412766a9bb80c	Only a finished pack changes the board
+30	flow	active	e5ca39049ca3621c	Find a pair
+31	flow	active	07888c3ebf574151	A mismatch
+32	flow	active	5b05f6a60dad4698	Win a game
