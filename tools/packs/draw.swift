@@ -2,6 +2,8 @@
 //
 //   swift tools/packs/draw.swift bundled <dir>         Shapes and Patterns: <dir>/shapes/*.png,
 //                                                      <dir>/patterns/*.png (the app's bundled packs)
+//   swift tools/packs/draw.swift cairns <dir>          the demo pack the cairn site serves: twelve
+//                                                      cairns of stones, with its pack.json
 //   swift tools/packs/draw.swift numbered <dir> <n> [name]
 //                                                      a pack of n numbered faces with its pack.json
 //                                                      (tests, the bench, the demo pack)
@@ -170,6 +172,39 @@ func drawNumbered(_ dir: String, _ n: Int, _ name: String) {
     try! json.write(toFile: "\(dir)/pack.json", atomically: true, encoding: .utf8)
 }
 
+// MARK: Cairns: stacks of one to four stones in three palettes, on a sky and a hill.
+
+func drawCairns(_ dir: String) {
+    let palettes: [(String, [CGColor])] = [
+        ("grey", [rgb(120, 124, 130), rgb(150, 154, 160), rgb(105, 108, 114), rgb(170, 172, 176)]),
+        ("sandstone", [rgb(196, 140, 88), rgb(214, 168, 112), rgb(176, 120, 72), rgb(226, 190, 140)]),
+        ("slate", [rgb(70, 86, 110), rgb(96, 112, 138), rgb(58, 72, 94), rgb(122, 138, 160)]),
+    ]
+    let words = ["One", "Two", "Three", "Four"]
+    var faces: [String] = []
+    for (pname, colors) in palettes {
+        for n in 1...4 {
+            let file = "\(pname)-\(n).png"
+            png("\(dir)/\(file)") { ctx in
+                ctx.setFillColor(rgb(214, 232, 244)); ctx.fill(CGRect(x: 0, y: 0, width: S, height: S))
+                ctx.setFillColor(rgb(150, 190, 120)); ctx.fillEllipse(in: CGRect(x: -60, y: -150, width: S + 120, height: 210))
+                var y: CGFloat = 44
+                for i in 0..<n {
+                    let w: CGFloat = 150 - CGFloat(i) * 26 - CGFloat(4 - n) * 6
+                    let h: CGFloat = 46 - CGFloat(i) * 4
+                    ctx.setFillColor(colors[i])
+                    ctx.fillEllipse(in: CGRect(x: (S - w) / 2 + CGFloat(i % 2 == 0 ? 0 : 6), y: y, width: w, height: h))
+                    y += h - 8
+                }
+            }
+            let stones = n == 1 ? "stone" : "stones"
+            faces.append("    {\"name\": \"\(words[n - 1]) \(pname) \(stones)\", \"image\": \"\(file)\"}")
+        }
+    }
+    let json = "{\n  \"name\": \"Cairns\",\n  \"pairs\": 8,\n  \"faces\": [\n" + faces.joined(separator: ",\n") + "\n  ]\n}\n"
+    try! json.write(toFile: "\(dir)/pack.json", atomically: true, encoding: .utf8)
+}
+
 func hsb(_ h: CGFloat) -> CGColor {
     let s: CGFloat = 0.55, v: CGFloat = 0.78
     let i = Int(h * 6) % 6, f = h * 6 - CGFloat(Int(h * 6))
@@ -181,9 +216,10 @@ func hsb(_ h: CGFloat) -> CGColor {
 let args = CommandLine.arguments
 switch (args.count > 1 ? args[1] : "", args.count) {
 case ("bundled", 3): drawBundled(args[2])
+case ("cairns", 3): drawCairns(args[2])
 case ("numbered", 4), ("numbered", 5):
     drawNumbered(args[2], Int(args[3])!, args.count == 5 ? args[4] : "Numbers")
 default:
-    FileHandle.standardError.write(Data("usage: draw.swift bundled <dir> | numbered <dir> <n> [name]\n".utf8))
+    FileHandle.standardError.write(Data("usage: draw.swift bundled <dir> | cairns <dir> | numbered <dir> <n> [name]\n".utf8))
     exit(2)
 }
